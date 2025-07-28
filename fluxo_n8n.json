@@ -1,0 +1,103 @@
+{
+  "name": "Identificação de Produtos",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "produtos",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const texto = $input.first().json.texto;\nconst itens = texto.split(',').map(item => item.trim().split(' '));\nreturn itens.map(([quantidade, ...produto]) => ({\n  quantidade: parseInt(quantidade),\n  produto: produto.join(' ')\n}));"
+      },
+      "name": "Split Text",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "/home/node/.n8n/data/exemplo-de-produtos.json"
+      },
+      "name": "Read JSON",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const jsonString = $input.first().json.content;\nconst produtos = JSON.parse(jsonString);\nreturn [{ json: { produtos } }];"
+      },
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const termos = $node['Split Text'].json;\nconst produtos = $node['Parse JSON'].json.produtos;\nconst resultados = [];\n\nfor (const termo of termos) {\n  const matches = produtos.filter(p =>\n    p.nome.toLowerCase().includes(termo.produto.toLowerCase()) ||\n    p.descricao.toLowerCase().includes(termo.produto.toLowerCase()) ||\n    p.codigo.toLowerCase().includes(termo.produto.toLowerCase())\n  );\n  resultados.push({\n    termo: termo.produto,\n    quantidade: termo.quantidade,\n    produtos_encontrados: matches.slice(0, 3)\n  });\n}\n\nreturn [{ json: resultados }];"
+      },
+      "name": "Buscar Produtos",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "/home/node/.n8n/data/resultados.json",
+        "data": "={{$node['Buscar Produtos'].json}}"
+      },
+      "name": "Write Resultados",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "json": [
+            {
+              "name": "resultados",
+              "value": "={{$node['Buscar Produtos'].json}}"
+            }
+          ]
+        }
+      },
+      "name": "Set Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1120, 500]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Split Text", "type": "main", "index": 0 }]]
+    },
+    "Split Text": {
+      "main": [[{ "node": "Buscar Produtos", "type": "main", "index": 0 }]]
+    },
+    "Read JSON": {
+      "main": [[{ "node": "Parse JSON", "type": "main", "index": 0 }]]
+    },
+    "Parse JSON": {
+      "main": [[{ "node": "Buscar Produtos", "type": "main", "index": 0 }]]
+    },
+    "Buscar Produtos": {
+      "main": [
+        [
+          { "node": "Write Resultados", "type": "main", "index": 0 },
+          { "node": "Set Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Set Response": {
+      "main": [[{ "node": "Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}
